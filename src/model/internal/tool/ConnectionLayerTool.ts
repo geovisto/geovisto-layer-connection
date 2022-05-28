@@ -17,13 +17,16 @@ import {
     CountAggregationFunction,
     DataChangeEvent,
     DataManagerChangeEvent,
-    GeoJSONTypes ,
+    GeoDataChangeEvent,
+    GeoDataManager,
+    GeoDataManagerChangeEvent,
+    GeoJSONTypes,
     IDataChangeAnimateOptions,
     IMapAggregationBucket,
     IMapAggregationFunction,
     IMapData,
-    IMapDataChangeEvent,
     IMapDataDomain,
+    IMapDataChangeEvent,
     IMapDataManager,
     IMapDimension,
     IMapEvent,
@@ -227,7 +230,7 @@ class ConnectionLayerTool extends AbstractLayerTool implements IConnectionLayerT
      */
     protected updateData(): { nodes: Set<string>, connections: Map<string, IMapAggregationBucket> } {
         // initialize a bucket data
-        const bucketData = {
+        let bucketData = {
             nodes: new Set<string>(),
             connections: new Map<string, IMapAggregationBucket>()
         };
@@ -281,10 +284,104 @@ class ConnectionLayerTool extends AbstractLayerTool implements IConnectionLayerT
                 }    
             }
 
+            // hierarchy support
+
+            // getting geoDataManager and active domain name.        
+            const geoManager = this.getState().getDimensions().geoData.getDomainManager() as GeoDataManager;
+            const domainName = this.getState().getDimensions().geoData.getValue()?.getName() ?? "";
+
+            // Check if hierarchy is enabled.
+            if (geoManager.isHierarchyEnabled() && geoManager.isHierarchyEnabledForDomain(domainName)) {
+                const hierarchyBucket = {
+                    nodes: new Set<string>(),
+                    connections: new Map<string, IMapAggregationBucket>()
+                };
+
+                const active = geoManager.getActiveByTree(domainName);
+                // If aggregation is enabled, aggregate from childrens
+                if (geoManager.treeAggregationFlag(domainName)) {
+                    const childsMap : Map<string, Set<string>> = new Map();
+                    // Iterate over active points
+                    active.forEach(activePoint => {
+                        const temp = geoManager.getChildsFromTree(domainName, activePoint);
+                        temp.push(activePoint);
+                        childsMap.set(activePoint, new Set(temp));
+                    });
+
+                    // Iterate over connections
+                    bucketData.connections.forEach((bucket, hashedNodes) => {
+                        // Unhashe nodes name
+                        const unhashed = this.bucketHashToGeoIds(hashedNodes);
+                        const boolGuards : boolean[] = [false, false];
+                        const stringGuards : string[] = [];
+                        // Check if both points are in childs.
+                        childsMap.forEach((ids, name) => {
+                            if (ids.has(unhashed[0])) {
+                                boolGuards[0] = true;
+                                stringGuards[0] = name;
+                            } else if (ids.has(unhashed[1])) {
+                                boolGuards[1] = true;
+                                stringGuards[1] = name;
+                            }
+                        });
+                        // If both points are in childs, and should be aggregated.
+                        if (boolGuards[0] && boolGuards[1]) {
+                            // Hash nodes back
+                            const hashedParents = this.geoIdsToBucketHash(stringGuards[0], stringGuards[1]);
+                            // If hierarchy bucket has connection already, just add another
+                            if (hierarchyBucket.connections.has(hashedParents)) {
+                                const agregBucket = hierarchyBucket.connections.get(hashedParents);
+                                agregBucket?.addValue(bucket.getValue());
+                                if(agregBucket) {
+                                    hierarchyBucket.connections.set(hashedParents, agregBucket);
+                                }
+                            } else {
+                                const agregBucket = aggregationDimension.getAggregationBucket();
+                                agregBucket.addValue(bucket.getValue());
+                                hierarchyBucket.connections.set(hashedParents, agregBucket);
+                            }
+
+                            // Add nodes in nodes set if not added already.
+                            if (!hierarchyBucket.nodes.has(stringGuards[0])) {
+                                hierarchyBucket.nodes.add(stringGuards[0]);
+                            }
+                            if (!hierarchyBucket.nodes.has(stringGuards[1])) {
+                                hierarchyBucket.nodes.add(stringGuards[1]);
+                            }
+                        }
+                    });
+                // If aggregation is disabled
+                } else {                        
+                    // Iterate over connections
+                    bucketData.connections.forEach((bucket, hashedNodes) => {
+                        const unhashedNodes = this.bucketHashToGeoIds(hashedNodes);
+                        let boolGuard = true;
+                        // Check if both points are in active
+                        for(let cnt = 0; cnt < unhashedNodes.length; cnt++) {
+                            boolGuard = active.includes(unhashedNodes[cnt]);
+                            if(!boolGuard){
+                                break;
+                            }
+                        }
+                        // If both are in active, add them to hierarchyBucket.
+                        if (boolGuard) {         
+                            hierarchyBucket.connections.set(hashedNodes, bucket);
+                            if (!hierarchyBucket.nodes.has(unhashedNodes[0])) {
+                                hierarchyBucket.nodes.add(unhashedNodes[0]);
+                            }
+                            if (!hierarchyBucket.nodes.has(unhashedNodes[1])) {
+                                hierarchyBucket.nodes.add(unhashedNodes[1]);
+                            }
+                        }
+                    });
+                }
+                bucketData = hierarchyBucket;
+            }
+
             // update work data
             this.getState().setBucketData(bucketData);
+            return bucketData;
         }
-
         return bucketData;
     }
 
@@ -496,6 +593,8 @@ class ConnectionLayerTool extends AbstractLayerTool implements IConnectionLayerT
                     break;
             }
         }
+
+        super.render(type);
     }
 
     /**
@@ -532,6 +631,12 @@ class ConnectionLayerTool extends AbstractLayerTool implements IConnectionLayerT
      */
     public handleEvent(event: IMapEvent): void {
         switch (event.getType()) {
+            case GeoDataManagerChangeEvent.TYPE():
+                this.render(LayerToolRenderType.DATA);
+                break;
+            case GeoDataChangeEvent.TYPE():
+                this.getState().isEnabled() ? this.render(LayerToolRenderType.DATA) : null;
+                break;
             case DataManagerChangeEvent.TYPE():
                 this.render(LayerToolRenderType.DATA);
                 break;

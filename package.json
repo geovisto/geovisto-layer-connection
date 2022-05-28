@@ -1,6 +1,6 @@
 {
   "name": "geovisto-layer-connection",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Geovisto tool which provides the connection layer",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
@@ -24,18 +24,26 @@
     "connections"
   ],
   "homepage": "https://github.com/geovisto/geovisto-layer-connection",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geovisto/geovisto-layer-connection"
+  },
   "author": {
     "name": "Jiri Hynek",
     "url": "https://github.com/jirka"
   },
   "contributors": [
     {
-      "name": "Krystof Rykala",
-      "url": "https://github.com/rykala"
-    },
-    {
       "name": "Jakub Kachlik",
       "url": "https://github.com/kachlikjakub"
+    },
+    {
+      "name": "Vojtech Maly",
+      "url": "https://github.com/FabioHexo"
+    },
+    {
+      "name": "Krystof Rykala",
+      "url": "https://github.com/rykala"
     }
   ],
   "license": "MIT",
@@ -60,9 +68,9 @@
     "@typescript-eslint/parser": "^4.28.5",
     "autoprefixer": "^10.3.1",
     "eslint": "^7.31.0",
-    "geovisto": "^1.0.0",
-    "geovisto-selection": "^1.0.2",
-    "geovisto-themes": "^1.0.1",
+    "geovisto": "^2.0.0",
+    "geovisto-selection": "^2.0.0",
+    "geovisto-themes": "^2.0.1",
     "husky": "^7.0.1",
     "leaflet": "^1.7.1",
     "postcss": "^8.3.6",
@@ -82,7 +90,7 @@
     "d3": "^7.0.0"
   },
   "peerDependencies": {
-    "geovisto": "^1.0.0",
+    "geovisto": "^2.0.0",
     "leaflet": "^1.7.1"
   }
 }
